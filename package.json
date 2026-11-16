@@ -20,7 +20,6 @@
   ],
   "license": "ISC",
   "dependencies": {
-    "@astrojs/node": "^11.1.13",
     "@astrojs/svelte": "^9.1.6",
     "@astrojs/vercel": "^11.0.22",
     "@neondatabase/serverless": "^1.2.1",
