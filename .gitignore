@@ -7,3 +7,7 @@ dist/
 test.db
 .DS_Store
 *.log
+
+.vercel
+dist
+node_modules
