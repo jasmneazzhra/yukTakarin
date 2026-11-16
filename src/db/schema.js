@@ -27,6 +27,7 @@ export const products = pgTable('products', {
   biayaKemasan: integer('biaya_kemasan').notNull().default(0),
   biayaOperasional: integer('biaya_operasional').notNull().default(0),
   stok: integer('stok').notNull().default(0),
+  kalori: integer('kalori'),
   instruksiDapur: text('instruksi_dapur'),
   imageUrl: text('image_url'),
   aktif: boolean('aktif').notNull().default(true),
@@ -78,7 +79,7 @@ export const users = pgTable('users', {
   dibuatPada: timestamp('dibuat_pada', { withTimezone: true }).notNull().defaultNow(),
 });
 
-/** Takaram rumah tangga untuk `products.porsi_dasar`. */
+/** Takaran rumah tangga untuk `products.porsi_dasar`. */
 export const recipes = pgTable('recipes', {
   id: serial('id').primaryKey(),
   productId: integer('product_id')

@@ -1,10 +1,5 @@
 ---
 import Base from '../layouts/Base.astro';
-import { daftarProduk } from '../lib/repo.js';
-import { placeholderMenu } from '../lib/placeholder.js';
-import { formatRupiah } from '../lib/kitchen.js';
-
-const populer = (await daftarProduk({ publik: true })).slice(0, 3);
 ---
 
 <Base judul="yukTakarin!" deskripsi="yukTakarin! — Katalog Coffee & Kue Rumahan">
@@ -49,42 +44,8 @@ const populer = (await daftarProduk({ publik: true })).slice(0, 3);
 
     <section>
       <h2 class="judul reveal">Menu Populer</h2>
-      <div class="grid">
-        {populer.map((item, i) => {
-          const nama = 'nama' in item ? item.nama : 'Menu';
-          const kategori = 'kategori' in item ? item.kategori : 'Umum';
-          const deskripsi = 'deskripsi' in item ? item.deskripsi : 'Menu pilihan kami.';
-          const harga = 'harga' in item ? item.harga : 0;
-          const minOrder = 'minOrder' in item ? item.minOrder : 1;
-          const satuan = 'satuan' in item ? item.satuan : '';
-          const imageUrl = 'imageUrl' in item ? item.imageUrl : '';
-
-          return (
-            <article class="card kartu reveal" style={`--i: ${i}`}>
-              <div class="kartu__bungkus">
-                <img
-                  class="kartu__foto"
-                  src={imageUrl || placeholderMenu(nama, kategori)}
-                  alt={nama}
-                  loading="lazy"
-                />
-              </div>
-              <div class="kartu__isi">
-                <span class="badge badge--netral">{kategori}</span>
-                <h3>{nama}</h3>
-                <p class="muted deskripsi">{deskripsi}</p>
-                <p class="meta">
-                  <strong class="tabular">{formatRupiah(harga)}</strong>
-                  <span class="muted">
-                    {satuan ? `/${satuan} · ` : ''}min. {minOrder}
-                  </span>
-                </p>
-                <a class="btn btn--quiet btn--sm btn--block" href="/menu">Lihat detail</a>
-              </div>
-            </article>
-          );
-        })}
-      </div>
+      <p class="muted">Kunjungi katalog untuk melihat menu yang tersedia.</p>
+      <a class="btn btn--quiet btn--sm" href="/menu">Lihat katalog</a>
     </section>
   </main>
 

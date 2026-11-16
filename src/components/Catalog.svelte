@@ -1,7 +1,7 @@
 <script>
   import { formatRupiah, formatTakaran, skalaResep, validasiPesanan, validasiStok } from '../lib/kitchen.js';
 
-    let { produk = [], sumber = 'seed', clientKey = '', snapUrl = '' } = $props();
+  let { produk = [], sumber = 'seed', clientKey = '', snapUrl = '' } = $props();
 
   const ONGKIR = 15000;
   const KATEGORI = ['Semua', 'Kopi & Minuman', 'Pastry & Roti', 'Kue Panggang', 'Paket Snack Box'];
@@ -21,6 +21,7 @@
   let kueri = $state('');
   let kategoriAktif = $state('Semua');
   let urutan = $state('nama');
+  let maksKalori = $state('');
 
   let dipilih = $state(null);
   let jumlah = $state(1);
@@ -40,7 +41,9 @@
       const cocokTeks =
         !teks ||
         `${item.nama} ${item.deskripsi} ${item.kategori}`.toLowerCase().includes(teks);
-      return cocokKategori && cocokTeks;
+      const batas = Number(maksKalori);
+      const cocokKalori = !(batas > 0) || (item.kalori != null && item.kalori <= batas);
+      return cocokKategori && cocokTeks && cocokKalori;
     });
 
     return [...saring].sort((a, b) => {
@@ -57,7 +60,6 @@
   const validasi = $derived.by(() =>
     validasiPesanan({
       jumlah: Number(jumlah),
-      minOrder: dipilih?.minOrder ?? 1,
       tanggal,
       jamKirim,
       nama,
@@ -68,7 +70,7 @@
   const galat = $derived(Object.fromEntries(validasi.errors.map((e) => [e.field, e.pesan])));
 
   const cekStok = $derived(
-    dipilih ? validasiStok({ jumlah: Number(jumlah), stok: dipilih.stok, minOrder: dipilih.minOrder }) : { valid: false },
+    dipilih ? validasiStok({ jumlah: Number(jumlah), stok: dipilih.stok }) : { valid: false },
   );
 
   const rincianDetail = $derived.by(() => {
@@ -86,13 +88,13 @@
 
   function pilih(item) {
     dipilih = item;
-    jumlah = item.minOrder;
+    jumlah = 1;
     sudahCoba = false;
   }
 
   function bukaDetail(item) {
     detail = item;
-    detailJumlah = item.minOrder ?? 1;
+    detailJumlah = 1;
   }
 
   function pakaiDetail() {
@@ -103,11 +105,11 @@
   function tambah(selisih) {
     if (!dipilih) return;
     const stok = Number(dipilih.stok ?? Infinity);
-    const berikut = Math.max(dipilih.minOrder, Math.min(stok, Number(jumlah || 0) + selisih));
+    const berikut = Math.max(1, Math.min(stok, Number(jumlah || 0) + selisih));
     jumlah = berikut;
   }
 
-    let sedangBayar = $state(false);
+  let sedangBayar = $state(false);
   let pesanError = $state('');
   let infoBayar = $state('');
   let pesananId = $state(null);
@@ -212,7 +214,7 @@
       <p class="wordmark">yukTakarin!</p>
       <p class="tagline">Coffee &amp; Kue rumahan</p>
     </div>
-    <a class="btn btn--primary btn--sm" href="/login">Masuk Pemilik</a>
+    <a class="btn btn--quiet btn--sm" href="/login">Masuk Pemilik</a>
   </div>
 </header>
 
@@ -221,12 +223,12 @@
     <p class="hero__eyebrow">Katering harian &amp; acara</p>
     <h1>Kopi, pastry, dan kue rumahan untuk rapat dan acara.</h1>
     <p class="hero__sub">
-      Pilih menu, tentukan jumlah dan jam ambil atau kirim. Pesanan langsung diteruskan ke dapur lewat
-      WhatsApp.
+      Pilih menu, tentukan jumlah dan jam ambil atau kirim, lalu bayar online. Pesanan langsung
+      diteruskan ke dapur setelah pembayaran.
     </p>
     <div class="hero__badges">
       <span class="badge badge--netral">Dipanggang harian</span>
-      <span class="badge badge--netral">Minimum pesanan jelas</span>
+      <span class="badge badge--netral">Tanpa minimal pesanan</span>
       <span class="badge badge--netral">Harga transparan</span>
     </div>
   </section>
@@ -256,6 +258,35 @@
       {/each}
     </div>
 
+    <div class="filters__kalori">
+      <label for="kalori">Maks. kalori / porsi</label>
+      <div class="kalori__baris">
+        <input
+          id="kalori"
+          class="input tabular"
+          type="number"
+          min="0"
+          step="10"
+          inputmode="numeric"
+          placeholder="mis. 250"
+          bind:value={maksKalori}
+        />
+        <span class="muted">kkal</span>
+      </div>
+      <div class="chips" role="group" aria-label="Pilihan cepat kalori">
+        {#each [200, 300, 400] as batas}
+          <button
+            type="button"
+            class="chip"
+            aria-pressed={Number(maksKalori) === batas}
+            onclick={() => (maksKalori = Number(maksKalori) === batas ? '' : batas)}
+          >
+            ≤ {batas}
+          </button>
+        {/each}
+      </div>
+    </div>
+
     <div class="filters__urut">
       <label for="urut">Urutkan</label>
       <select id="urut" class="select" bind:value={urutan}>
@@ -269,6 +300,9 @@
   <div class="layout">
     <section aria-label="Katalog menu">
       <p class="hasil" aria-live="polite">{hasil.length} menu ditampilkan</p>
+      {#if Number(maksKalori) > 0}
+        <p class="muted">Menu ≤ {maksKalori} kkal per porsi. Menu tanpa data kalori disembunyikan.</p>
+      {/if}
 
       {#if hasil.length === 0}
         <div class="kosong panel">
@@ -280,6 +314,7 @@
             onclick={() => {
               kueri = '';
               kategoriAktif = 'Semua';
+              maksKalori = '';
             }}>Reset filter</button
           >
         </div>
@@ -297,7 +332,7 @@
                 <p class="kartu__meta">
                   <span class="tabular">{rupiah(item.harga)}</span>
                   <span class="muted">/{item.satuan}</span>
-                  <span class="muted">· min. {item.minOrder}</span>
+                  {#if item.kalori}<span class="muted">· ±{item.kalori} kkal/porsi</span>{/if}
                 </p>
                 <div class="kartu__aksi">
                   <button type="button" class="btn btn--quiet btn--sm btn--block" onclick={() => bukaDetail(item)}>
@@ -330,7 +365,7 @@
         {:else}
           <p class="checkout__menu">{dipilih.nama}</p>
           <p class="muted checkout__harga">
-            {rupiah(dipilih.harga)} /{dipilih.satuan} · min. {dipilih.minOrder}
+            {rupiah(dipilih.harga)} /{dipilih.satuan}
           </p>
 
           <div class="field">
@@ -341,13 +376,13 @@
                 class="stepper__btn"
                 aria-label="Kurangi jumlah"
                 onclick={() => tambah(-1)}
-                disabled={Number(jumlah) <= dipilih.minOrder}>−</button
+                disabled={Number(jumlah) <= 1}>−</button
               >
               <input
                 id="jumlah"
                 class="stepper__input tabular"
                 type="number"
-                min={dipilih.minOrder}
+                min="1"
                 max={dipilih.stok ?? undefined}
                 step="1"
                 bind:value={jumlah}
@@ -444,7 +479,14 @@
             <div class="rincian__total"><dt>Total</dt><dd class="tabular">{rupiah(total)}</dd></div>
           </dl>
 
-                    <button
+          {#if dipilih.kalori}
+            <p class="muted catatan-kecil">
+              Perkiraan ±{dipilih.kalori * Number(jumlah || 0) * (dipilih.porsiPerSatuan ?? 1)} kkal total
+              ({dipilih.kalori} kkal × {Number(jumlah || 0) * (dipilih.porsiPerSatuan ?? 1)} porsi).
+            </p>
+          {/if}
+
+          <button
             type="button"
             class="btn btn--primary btn--block"
             disabled={!validasi.valid || !cekStok.valid || sedangBayar}
@@ -461,13 +503,6 @@
           {/if}
           <p class="muted catatan-kecil">
             Pembayaran aman via Midtrans (QRIS, transfer bank, e-wallet, kartu). Pesanan dikonfirmasi setelah pembayaran diterima.
-          </p>
-          >
-          {#if !cekStok.valid}
-            <p class="error-text"><span aria-hidden="true">!</span>{cekStok.pesan}</p>
-          {/if}
-          <p class="muted catatan-kecil">
-            Pesanan dikonfirmasi pemilik lewat WhatsApp. Harga belum termasuk biaya lain di luar rincian ini.
           </p>
         {/if}
       </div>
@@ -489,7 +524,7 @@
       </div>
       <p class="muted modal__deskripsi">{detail.deskripsi}</p>
       <p class="muted kecil">
-        {rupiah(detail.harga)} /{detail.satuan} · min. {detail.minOrder} ·
+        {rupiah(detail.harga)} /{detail.satuan} ·
         {detail.porsiPerSatuan ?? 1} porsi per {detail.satuan}
       </p>
 
@@ -499,7 +534,7 @@
           id="modal-jumlah"
           class="input tabular"
           type="number"
-          min={detail.minOrder}
+          min="1"
           step="1"
           bind:value={detailJumlah}
         />
@@ -656,7 +691,7 @@
 
   @media (min-width: 900px) {
     .filters {
-      grid-template-columns: 280px 1fr auto;
+      grid-template-columns: 280px 1fr auto auto;
       align-items: center;
     }
   }
@@ -984,5 +1019,17 @@
     gap: 8px;
     flex-wrap: wrap;
     margin-top: 14px;
+  }
+
+  .filters__kalori {
+    display: grid;
+    gap: 6px;
+  }
+
+  .kalori__baris {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 200px;
   }
 </style>

@@ -1,24 +1,48 @@
 ---
 import Base from '../layouts/Base.astro';
 import Catalog from '../components/Catalog.svelte';
-import { daftarProduk, modeData } from '../lib/repo.js';
+import * as repo from '../lib/repo.js';
 import { placeholderMenu } from '../lib/placeholder.js';
 import { bacaEnv } from '../lib/env.js';
 
-const produk = await daftarProduk({ publik: true });
-const katalog = produk.map((item) => ({
-  ...item,
-  imageUrl: item.imageUrl || placeholderMenu(item.nama, item.kategori),
-}));
-const sumber = modeData();
+const repoApi = repo as unknown as Record<string, unknown>;
+const namaLoader = ['daftarProduk', 'listProduk', 'getProducts'];
+const loader =
+  namaLoader.map((nama) => repoApi[nama]).find((nilai) => typeof nilai === 'function') ??
+  Object.entries(repoApi).find(
+    ([nama, nilai]) =>
+      /produk|product/i.test(nama) && /list|get|daftar/i.test(nama) &&
+      typeof nilai === 'function',
+  )?.[1];
+if (typeof loader !== 'function') {
+  throw new Error('Tidak ada fungsi untuk mengambil daftar produk di repo.');
+}
+const produk = await (loader as (opsi: { publik: boolean }) => Promise<unknown[]>)(
+  { publik: true },
+);
+const katalog = (produk as Array<Record<string, unknown>>).map((item) => {
+  const produkItem = item as Record<string, unknown>;
+  return {
+    ...produkItem,
+    imageUrl:
+      (typeof produkItem.imageUrl === 'string' ? produkItem.imageUrl : '') ||
+      placeholderMenu(
+        String(produkItem.nama ?? ''),
+        String(produkItem.kategori ?? ''),
+      ),
+  };
+});
+const sumber = String((repoApi.modeData as (() => unknown) | undefined)?.() ?? '');
 
-const clientKey = bacaEnv('MIDTRANS_CLIENT_KEY');
-const snapUrl =
+// Client key memang publik (dipakai browser). Server key TIDAK pernah dikirim ke sini.
+const clientKey = String(bacaEnv('MIDTRANS_CLIENT_KEY') ?? '');
+const snapUrl = String(
   bacaEnv('MIDTRANS_IS_PRODUCTION') === 'true'
     ? 'https://app.midtrans.com/snap/snap.js'
-    : 'https://app.sandbox.midtrans.com/snap/snap.js';
+    : 'https://app.sandbox.midtrans.com/snap/snap.js',
+);
 ---
 
 <Base judul="yukTakarin! — Katalog" deskripsi="Katalog menu kopi, pastry, dan kue rumahan. Pilih menu, atur jumlah dan jadwal, lalu bayar online.">
-  <Catalog client:load produk={katalog} sumber={sumber} clientKey={clientKey} snapUrl={snapUrl} />
+  <Catalog produk={katalog} sumber={sumber} clientKey={clientKey} snapUrl={snapUrl} />
 </Base>

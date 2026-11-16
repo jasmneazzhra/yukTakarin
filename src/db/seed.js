@@ -37,6 +37,7 @@ const DDL = [
     biaya_kemasan integer NOT NULL DEFAULT 0,
     biaya_operasional integer NOT NULL DEFAULT 0,
     stok integer NOT NULL DEFAULT 0,
+    kalori integer,
     instruksi_dapur text,
     image_url text,
     aktif boolean NOT NULL DEFAULT true,
@@ -106,6 +107,8 @@ async function main() {
   // Untuk database lama yang tabelnya sudah ada tapi kolomnya kurang
   await sql.query('ALTER TABLE products ADD COLUMN IF NOT EXISTS stok integer NOT NULL DEFAULT 0');
   await sql.query('ALTER TABLE products ADD COLUMN IF NOT EXISTS instruksi_dapur text');
+  await sql.query('ALTER TABLE products ADD COLUMN IF NOT EXISTS kalori integer');
+  await sql.query('UPDATE products SET min_order = 1'); // tidak ada minimal pemesanan lagi
   await sql.query('ALTER TABLE recipes ADD COLUMN IF NOT EXISTS takaran_kira_kira text');
   await sql.query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_status text NOT NULL DEFAULT 'pending'");
   await sql.query('ALTER TABLE orders ADD COLUMN IF NOT EXISTS user_id integer REFERENCES users(id) ON DELETE SET NULL');
@@ -136,11 +139,11 @@ async function main() {
     const [row] = await sql`
       INSERT INTO products (slug, nama, deskripsi, kategori, harga, satuan, min_order, porsi_dasar,
                             porsi_per_satuan, prep_menit, proses_label, proses_menit, packing_menit,
-                            biaya_kemasan, biaya_operasional, stok, instruksi_dapur, image_url, aktif)
+                            biaya_kemasan, biaya_operasional, stok, kalori, instruksi_dapur, image_url, aktif)
       VALUES (${menu.slug}, ${menu.nama}, ${menu.deskripsi}, ${menu.kategori}, ${menu.harga}, ${menu.satuan},
               ${menu.minOrder}, ${menu.porsiDasar}, ${menu.porsiPerSatuan}, ${menu.prepMenit},
               ${menu.prosesLabel}, ${menu.prosesMenit}, ${menu.packingMenit}, ${menu.biayaKemasan},
-              ${menu.biayaOperasional}, ${menu.stok ?? 0}, ${menu.instruksiDapur ?? null}, ${menu.imageUrl ?? null}, ${menu.aktif})
+              ${menu.biayaOperasional}, ${menu.stok ?? 0}, ${menu.kalori ?? null}, ${menu.instruksiDapur ?? null}, ${menu.imageUrl ?? null}, ${menu.aktif})
       ON CONFLICT (slug) DO UPDATE SET
         nama = EXCLUDED.nama,
         deskripsi = EXCLUDED.deskripsi,
@@ -157,6 +160,7 @@ async function main() {
         biaya_kemasan = EXCLUDED.biaya_kemasan,
         biaya_operasional = EXCLUDED.biaya_operasional,
         stok = EXCLUDED.stok,
+        kalori = EXCLUDED.kalori,
         instruksi_dapur = EXCLUDED.instruksi_dapur,
         aktif = EXCLUDED.aktif
       RETURNING id

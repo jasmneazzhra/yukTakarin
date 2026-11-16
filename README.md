@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # yukTakarin! — Point of Sale Warung Makan
 
 Aplikasi point-of-sale untuk warung makan dengan fitur role-based auth, konversi satuan, dan checkout WhatsApp.
@@ -134,3 +135,6 @@ npm run build && npx vitest run
 ---
 
 **yukTakarin!** — Mudah, neboetralisme, tanpa pembayaran online kompleks.
+=======
+# yukTakarin
+>>>>>>> 386c17c40ca5fc77ecf2e5689247e774aabbf68c

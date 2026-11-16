@@ -248,6 +248,18 @@ export const BAHAN = [
 
 const r = (bahan, jumlah, satuan, opsi = {}) => ({ bahan, jumlah, satuan, ...opsi });
 
+/** Perkiraan kkal PER PORSI (hitungan kasar dari resep). Sesuaikan dengan data asli. */
+const KALORI = {
+  'kopi-susu-gula-aren-literan': 235,
+  'es-kopi-pandan': 175,
+  'croissant-butter': 375,
+  'cinnamon-roll': 350,
+  'brownies-fudgy-panggang': 350,
+  'bolu-tape-keju': 400,
+  'paket-coffee-break-box': 900,
+  'matcha-latte-botolan': 240,
+};
+
 export const MENU = [
   {
     slug: 'kopi-susu-gula-aren-literan',
@@ -505,6 +517,8 @@ export const MENU = [
   },
 ].map((menu) => ({
   ...menu,
+  minOrder: 1, // tidak ada minimal pemesanan
+  kalori: menu.kalori ?? KALORI[menu.slug] ?? null,
   resep: menu.resep.map((baris) => rinci(baris, menu.porsiDasar)),
 }));
 

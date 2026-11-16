@@ -7,6 +7,7 @@ const json = (data, status = 200) =>
     headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
   });
 
+// Dipanggil sebagai /api/payments/status?order_id=YT-1-1700000000000
 export async function GET({ url }) {
   try {
     const orderId = url.searchParams.get('order_id');
