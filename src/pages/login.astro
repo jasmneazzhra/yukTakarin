@@ -1,0 +1,30 @@
+---
+import Base from '../layouts/Base.astro';
+import LoginForm from '../components/LoginForm.svelte';
+import { kredensialPemilik } from '../lib/auth.js';
+
+const modeDev = kredensialPemilik().modeDev;
+const galat = Astro.url.searchParams.get('galat') === '1';
+---
+
+<Base judul="Masuk Pemilik Warung — yukTakarin!" deskripsi="Halaman masuk khusus Pemilik Warung yukTakarin!.">
+  <main class="wrap masuk">
+    <a class="kembali" href="/">← Kembali ke katalog</a>
+    <LoginForm client:load modeDev={modeDev} galat={galat} />
+  </main>
+</Base>
+
+<style>
+  .masuk {
+    max-width: 460px;
+    padding-top: 40px;
+    padding-bottom: 64px;
+  }
+
+  .kembali {
+    display: inline-block;
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 16px;
+  }
+</style>

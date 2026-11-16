@@ -1,0 +1,24 @@
+---
+import Base from '../layouts/Base.astro';
+import Catalog from '../components/Catalog.svelte';
+import { daftarProduk, modeData } from '../lib/repo.js';
+import { placeholderMenu } from '../lib/placeholder.js';
+import { bacaEnv } from '../lib/env.js';
+
+const produk = await daftarProduk({ publik: true });
+const katalog = produk.map((item) => ({
+  ...item,
+  imageUrl: item.imageUrl || placeholderMenu(item.nama, item.kategori),
+}));
+const sumber = modeData();
+
+const clientKey = bacaEnv('MIDTRANS_CLIENT_KEY');
+const snapUrl =
+  bacaEnv('MIDTRANS_IS_PRODUCTION') === 'true'
+    ? 'https://app.midtrans.com/snap/snap.js'
+    : 'https://app.sandbox.midtrans.com/snap/snap.js';
+---
+
+<Base judul="yukTakarin! — Katalog" deskripsi="Katalog menu kopi, pastry, dan kue rumahan. Pilih menu, atur jumlah dan jadwal, lalu bayar online.">
+  <Catalog client:load produk={katalog} sumber={sumber} clientKey={clientKey} snapUrl={snapUrl} />
+</Base>

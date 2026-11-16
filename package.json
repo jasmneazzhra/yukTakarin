@@ -1,0 +1,33 @@
+{
+  "name": "yuktakarin",
+  "version": "2.0.0",
+  "description": "Katalog menu pelanggan & asisten dapur presisi untuk UMKM coffee & kue",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "test": "vitest run",
+    "seed": "node --env-file-if-exists=.env src/db/seed.js"
+  },
+  "keywords": [
+    "astro",
+    "svelte",
+    "neon",
+    "umkm",
+    "katering"
+  ],
+  "license": "ISC",
+  "dependencies": {
+    "@astrojs/node": "^11.1.13",
+    "@astrojs/svelte": "^9.1.6",
+    "@neondatabase/serverless": "^1.2.1",
+    "astro": "^7.4.12",
+    "drizzle-orm": "^0.45.4",
+    "svelte": "^5.57.3"
+  },
+  "devDependencies": {
+    "vitest": "^5.1.0"
+  }
+}

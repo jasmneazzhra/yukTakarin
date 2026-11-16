@@ -1,0 +1,19 @@
+---
+import "../styles/global.css";
+
+const { judul = "yukTakarin!", deskripsi = "Katalog menu coffee & kue rumahan." } = Astro.props;
+---
+
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={deskripsi} />
+    <meta name="theme-color" content="#F6F2E9" />
+    <title>{judul}</title>
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

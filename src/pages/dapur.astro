@@ -1,0 +1,13 @@
+---
+import Base from '../layouts/Base.astro';
+import Dashboard from '../components/dapur/Dashboard.svelte';
+import { daftarBahan, daftarProduk, modeData } from '../lib/repo.js';
+
+const produk = (await daftarProduk()).map(({ dibuatPada, ...sisa }) => sisa);
+const bahan = (await daftarBahan()).map(({ id, ...sisa }) => sisa);
+const sumber = modeData();
+---
+
+<Base judul="Dapur — yukTakarin!" deskripsi="Dashboard dapur: kendali menu, gramasi, inflasi bahan, dan jadwal masak mundur.">
+  <Dashboard client:load produk={produk} bahan={bahan} sumber={sumber} />
+</Base>
