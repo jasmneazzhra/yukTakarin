@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { formatRupiah, formatTakaran, skalaResep, validasiPesanan, validasiStok } from '../lib/kitchen.js';
 
-  let { produk = [], sumber = 'seed', clientKey = '', snapUrl = '' } = $props();
+  let { produk = [], sumber = 'seed', clientKey = '', snapUrl = '', waNumber = '' } = $props();
 
   const ONGKIR = 15000;
   const KATEGORI = ['Semua', 'Kopi & Minuman', 'Pastry & Roti', 'Kue Panggang', 'Paket Snack Box'];
@@ -33,23 +33,6 @@
   let sudahCoba = $state(false);
   let detail = $state(null);
   let detailJumlah = $state(1);
-  let dipilih = $state(null);
-  let jumlah = $state(1);
-
-  const cekStok = $derived.by(() => {
-    if (!dipilih) return { valid: true, pesan: '' };
-    return validasiStok({ jumlah: Number(jumlah) || 0, stok: Number(dipilih.stok ?? 0) });
-  });
-
-  function pilih(item) {
-    dipilih = item;
-    jumlah = 1;
-  }
-
-  function tambah(selisih) {
-    if (!dipilih) return;
-    jumlah = Math.max(1, Math.min(Number(dipilih.stok ?? Infinity), Number(jumlah || 1) + selisih));
-  }
 
   const hasil = $derived.by(() => {
     const teks = kueri.trim().toLowerCase();
@@ -196,6 +179,81 @@
     }
   }
 
+  // Buat pesanan di server (dipakai bersama oleh Midtrans & WhatsApp).
+  async function buatPesananServer(metodeBayar) {
+    const res = await fetch('/api/orders', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        items: baris.map((b) => ({ productId: b.item.id, jumlah: b.jumlah })),
+        jamKirim,
+        tanggal,
+        mode,
+        catatan,
+        nama,
+        metodeBayar,
+      }),
+    });
+    const hasilPesanan = await res.json();
+    if (!res.ok) throw new Error(hasilPesanan.error ?? 'Gagal membuat pesanan.');
+    return hasilPesanan.data;
+  }
+
+  function nomorWa() {
+    let angka = String(waNumber).replace(/\D/g, '');
+    if (angka.startsWith('0')) angka = `62${angka.slice(1)}`;
+    return angka;
+  }
+
+  function teksWa(p) {
+    const rincian = p.items.map((i) => `• ${i.namaMenu} ×${i.jumlah} — ${rupiah(i.harga * i.jumlah)}`);
+    return [
+      `Halo yukTakarin! Saya mau pesan (No. Pesanan #${p.id}):`,
+      '',
+      ...rincian,
+      '',
+      `Subtotal: ${rupiah(p.subtotal)}`,
+      `Ongkir: ${rupiah(p.ongkir)}`,
+      `*Total: ${rupiah(p.totalHarga)}*`,
+      '',
+      `Cara terima: ${p.mode === 'kirim' ? 'Kirim' : 'Ambil sendiri'}`,
+      `Tanggal: ${p.tanggalKirim}, jam ${p.jamKirim.replace(':', '.')}`,
+      `Nama: ${p.namaPemesan}`,
+      ...(p.catatan ? [`Catatan: ${p.catatan}`] : []),
+      '',
+      'Mohon info cara pembayarannya ya. Terima kasih!',
+    ].join('\n');
+  }
+
+  async function pesanWa(event) {
+    event.preventDefault();
+    sudahCoba = true;
+    pesanError = '';
+    infoBayar = '';
+    if (!validasi.valid || baris.length === 0 || stokError) return;
+    if (!nomorWa()) {
+      pesanError = 'Nomor WhatsApp belum dikonfigurasi (PUBLIC_WA_NUMBER kosong).';
+      return;
+    }
+
+    // Buka tab sekarang (saat klik) supaya tidak diblokir popup blocker.
+    const jendela = window.open('', '_blank');
+    sedangBayar = true;
+    try {
+      const pesanan = await buatPesananServer('whatsapp');
+      const url = `https://wa.me/${nomorWa()}?text=${encodeURIComponent(teksWa(pesanan))}`;
+      if (jendela) jendela.location.href = url;
+      else window.location.href = url;
+      infoBayar = `Pesanan #${pesanan.id} dibuat. Lanjutkan pembayaran lewat chat WhatsApp.`;
+      keranjang = [];
+    } catch (error) {
+      jendela?.close();
+      pesanError = error.message;
+    } finally {
+      sedangBayar = false;
+    }
+  }
+
   async function bayar(event) {
     event.preventDefault();
     sudahCoba = true;
@@ -203,28 +261,15 @@
     infoBayar = '';
     if (!validasi.valid || baris.length === 0 || stokError) return;
     if (!clientKey || !snapUrl) {
-      pesanError = 'Pembayaran belum dikonfigurasi (MIDTRANS_CLIENT_KEY kosong).';
+      pesanError = 'Pembayaran online belum dikonfigurasi (MIDTRANS_CLIENT_KEY kosong).';
       return;
     }
 
     sedangBayar = true;
     try {
       if (!pesananId) {
-        const resPesanan = await fetch('/api/orders', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            items: baris.map((b) => ({ productId: b.item.id, jumlah: b.jumlah })),
-            jamKirim,
-            tanggal,
-            mode,
-            catatan,
-            nama,
-          }),
-        });
-        const hasilPesanan = await resPesanan.json();
-        if (!resPesanan.ok) throw new Error(hasilPesanan.error ?? 'Gagal membuat pesanan.');
-        pesananId = hasilPesanan.data.id;
+        const pesanan = await buatPesananServer('midtrans');
+        pesananId = pesanan.id;
       }
 
       const resBayar = await fetch('/api/payments/init', {
@@ -270,7 +315,10 @@
       <p class="wordmark">yukTakarin!</p>
       <p class="tagline">Coffee &amp; Kue rumahan</p>
     </div>
-    <a class="btn btn--quiet btn--sm" href="/login">Masuk Pemilik</a>
+    <div class="topbar__aksi">
+      <a class="btn btn--quiet btn--sm" href="#keranjang">Keranjang ({jumlahItem})</a>
+      <a class="btn btn--quiet btn--sm" href="/login">Masuk Pemilik</a>
+    </div>
   </div>
 </header>
 
@@ -377,7 +425,7 @@
       {:else}
         <div class="grid">
           {#each hasil as item (item.id)}
-            <article class="card kartu" class:dipilih-kartu={dipilih?.id === item.id}>
+            <article class="card kartu" class:dipilih-kartu={adaDiKeranjang(item.id) > 0}>
               <div class="kartu__foto">
                 <img src={item.imageUrl} alt={item.nama} loading="lazy" width="400" height="300" />
                 <span class="badge badge--netral kartu__badge">{item.kategori}</span>
@@ -398,9 +446,13 @@
                     type="button"
                     class="btn btn--primary btn--block"
                     disabled={Number(item.stok ?? 0) <= 0}
-                    onclick={() => pilih(item)}
+                    onclick={() => tambahKeranjang(item)}
                   >
-                    {Number(item.stok ?? 0) <= 0 ? 'Sold Out' : dipilih?.id === item.id ? 'Menu dipilih' : 'Pesan'}
+                    {Number(item.stok ?? 0) <= 0
+                      ? 'Sold Out'
+                      : adaDiKeranjang(item.id) > 0
+                        ? `+ Tambah (${adaDiKeranjang(item.id)} di keranjang)`
+                        : '+ Keranjang'}
                   </button>
                 </div>
               </div>
@@ -412,47 +464,36 @@
 
     <aside class="checkout" aria-label="Pesanan">
       <div class="panel">
-        <h2 class="panel__title">Pesanan kamu</h2>
-        {#if !dipilih}
-          <p class="panel__hint">Pilih satu menu untuk mulai memesan.</p>
+        <h2 class="panel__title" id="keranjang">Keranjang ({jumlahItem})</h2>
+        {#if baris.length === 0}
+          <p class="panel__hint">Keranjang masih kosong. Tekan “+ Keranjang” pada menu yang kamu mau.</p>
           <div class="checkout__kosong">
             <span class="badge badge--netral">Belum ada menu</span>
           </div>
         {:else}
-          <p class="checkout__menu">{dipilih.nama}</p>
-          <p class="muted checkout__harga">
-            {rupiah(dipilih.harga)} /{dipilih.satuan}
-          </p>
-
-          <div class="field">
-            <label for="jumlah">Jumlah ({dipilih.satuan})</label>
-            <div class="stepper">
-              <button
-                type="button"
-                class="stepper__btn"
-                aria-label="Kurangi jumlah"
-                onclick={() => tambah(-1)}
-                disabled={Number(jumlah) <= 1}>−</button
-              >
-              <input
-                id="jumlah"
-                class="stepper__input tabular"
-                type="number"
-                min="1"
-                max={dipilih.stok ?? undefined}
-                step="1"
-                bind:value={jumlah}
-                aria-invalid={sudahCoba && galat.jumlah ? 'true' : 'false'}
-                aria-describedby={sudahCoba && galat.jumlah ? 'galat-jumlah' : undefined}
-              />
-              <button type="button" class="stepper__btn" aria-label="Tambah jumlah" onclick={() => tambah(1)}>
-                +
-              </button>
-            </div>
-            {#if sudahCoba && galat.jumlah}
-              <p class="error-text" id="galat-jumlah"><span aria-hidden="true">!</span>{galat.jumlah}</p>
-            {/if}
-          </div>
+          <ul class="keranjang">
+            {#each baris as b (b.item.id)}
+              <li class="keranjang__item">
+                <div class="keranjang__info">
+                  <p class="checkout__menu">{b.item.nama}</p>
+                  <p class="muted checkout__harga">{rupiah(b.item.harga)} /{b.item.satuan}</p>
+                </div>
+                <div class="stepper">
+                  <button type="button" class="stepper__btn" aria-label="Kurangi {b.item.nama}"
+                    onclick={() => ubahJumlah(b.item.id, -1)} disabled={b.jumlah <= 1}>−</button>
+                  <input class="stepper__input tabular" type="number" min="1" max={b.item.stok ?? undefined}
+                    step="1" aria-label="Jumlah {b.item.nama}" value={b.jumlah}
+                    onchange={(e) => aturJumlah(b.item.id, e.currentTarget.value)} />
+                  <button type="button" class="stepper__btn" aria-label="Tambah {b.item.nama}"
+                    onclick={() => ubahJumlah(b.item.id, 1)}>+</button>
+                </div>
+                <div class="keranjang__baris">
+                  <span class="tabular">{rupiah(b.item.harga * b.jumlah)}</span>
+                  <button type="button" class="btn btn--quiet btn--sm" onclick={() => hapusItem(b.item.id)}>Hapus</button>
+                </div>
+              </li>
+            {/each}
+          </ul>
 
           <div class="field">
             <span class="label-teks">Cara terima</span>
@@ -535,21 +576,27 @@
             <div class="rincian__total"><dt>Total</dt><dd class="tabular">{rupiah(total)}</dd></div>
           </dl>
 
-          {#if dipilih.kalori}
-            <p class="muted catatan-kecil">
-              Perkiraan ±{dipilih.kalori * Number(jumlah || 0) * (dipilih.porsiPerSatuan ?? 1)} kkal total
-              ({dipilih.kalori} kkal × {Number(jumlah || 0) * (dipilih.porsiPerSatuan ?? 1)} porsi).
-            </p>
+          {#if totalKalori > 0}
+            <p class="muted catatan-kecil">Perkiraan ±{totalKalori} kkal untuk seluruh pesanan.</p>
           {/if}
 
-          <button
-            type="button"
-            class="btn btn--primary btn--block"
-            disabled={!validasi.valid || !cekStok.valid || sedangBayar}
-            onclick={bayar}>{sedangBayar ? 'Memproses…' : `Bayar ${rupiah(total)}`}</button
-          >
-          {#if !cekStok.valid}
-            <p class="error-text"><span aria-hidden="true">!</span>{cekStok.pesan}</p>
+          <div class="metode-bayar">
+            <button
+              type="button"
+              class="btn btn--primary btn--block"
+              disabled={!validasi.valid || !!stokError || sedangBayar}
+              onclick={bayar}>{sedangBayar ? 'Memproses…' : `Bayar online ${rupiah(total)}`}</button
+            >
+            <p class="atau" aria-hidden="true">atau</p>
+            <button
+              type="button"
+              class="btn btn--quiet btn--block"
+              disabled={!validasi.valid || !!stokError || sedangBayar}
+              onclick={pesanWa}>Pesan &amp; bayar via WhatsApp</button
+            >
+          </div>
+          {#if stokError}
+            <p class="error-text"><span aria-hidden="true">!</span>{stokError}</p>
           {/if}
           {#if pesanError}
             <p class="error-text" role="alert"><span aria-hidden="true">!</span>{pesanError}</p>
@@ -558,7 +605,7 @@
             <p class="muted" role="status"><strong>{infoBayar}</strong></p>
           {/if}
           <p class="muted catatan-kecil">
-            Pembayaran aman via Midtrans (QRIS, transfer bank, e-wallet, kartu). Pesanan dikonfirmasi setelah pembayaran diterima.
+            Bayar online via Midtrans (QRIS, transfer bank, e-wallet, kartu), atau kirim pesanan ke WhatsApp warung dan bayar langsung lewat chat.
           </p>
         {/if}
       </div>
@@ -630,7 +677,7 @@
       {/if}
 
       <div class="modal__aksi">
-        <button type="button" class="btn btn--primary" onclick={pakaiDetail}>Pilih menu ini</button>
+        <button type="button" class="btn btn--primary" onclick={pakaiDetail}>Tambah ke keranjang</button>
         <button type="button" class="btn btn--quiet" onclick={() => (detail = null)}>Tutup</button>
       </div>
     </div>
@@ -861,6 +908,15 @@
     font-weight: 800;
     font-size: 18px;
   }
+
+  .topbar__aksi { display: flex; gap: 8px; }
+  .keranjang { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 12px; }
+  .keranjang__item { display: grid; gap: 8px; padding-bottom: 12px; border-bottom: 1px dashed var(--ink-soft, #999); }
+  .keranjang__item .checkout__harga { margin-bottom: 0; }
+  .keranjang__baris { display: flex; justify-content: space-between; align-items: center; font-weight: 700; }
+
+  .metode-bayar { display: grid; gap: 8px; }
+  .atau { margin: 0; text-align: center; font-size: 12px; font-weight: 700; color: var(--ink-soft); }
 
   .checkout__kosong {
     background: var(--cream-deep);

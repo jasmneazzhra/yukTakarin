@@ -13,7 +13,7 @@ export async function POST({ request }) {
     if (!order_id) return json({ error: 'order_id wajib diisi.' }, 400);
 
     const pesanan = await ambilPesanan(order_id);
-    if (pesanan.payment_status === 'paid') return json({ error: 'Pesanan sudah dibayar.' }, 409);
+    if (pesanan.paymentStatus === 'paid') return json({ error: 'Pesanan sudah dibayar.' }, 409);
     if (!(pesanan.totalHarga > 0)) return json({ error: 'Total pesanan tidak valid.' }, 400);
 
     const midtransOrderId = buatOrderIdMidtrans(pesanan.id);

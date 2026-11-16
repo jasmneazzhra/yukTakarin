@@ -36,6 +36,7 @@ const sumber = String((repoApi.modeData as (() => unknown) | undefined)?.() ?? '
 
 // Client key memang publik (dipakai browser). Server key TIDAK pernah dikirim ke sini.
 const clientKey = String(bacaEnv('MIDTRANS_CLIENT_KEY') ?? '');
+const waNumber = String(bacaEnv('PUBLIC_WA_NUMBER') ?? '');
 const snapUrl = String(
   bacaEnv('MIDTRANS_IS_PRODUCTION') === 'true'
     ? 'https://app.midtrans.com/snap/snap.js'
@@ -44,5 +45,5 @@ const snapUrl = String(
 ---
 
 <Base judul="yukTakarin! — Katalog" deskripsi="Katalog menu kopi, pastry, dan kue rumahan. Pilih menu, atur jumlah dan jadwal, lalu bayar online.">
-  <Catalog client:load produk={katalog} sumber={sumber} clientKey={clientKey} snapUrl={snapUrl} />
+  <Catalog client:load produk={katalog} sumber={sumber} clientKey={clientKey} snapUrl={snapUrl} waNumber={waNumber} />
 </Base>

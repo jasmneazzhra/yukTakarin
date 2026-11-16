@@ -52,6 +52,7 @@ export function modeData() {
 
 const err = (message, status = 400) => Object.assign(new Error(message), { status });
 
+/** Komposisi untuk modal katalog: tanpa harga/biaya bahan. */
 function komposisiUntukPublik(resep = []) {
   return resep.map((r) => {
     const b = _bahan.find((x) => x.slug === (r.bahan ?? r.slug)) ?? {};
@@ -199,6 +200,7 @@ export async function buatPesanan(body) {
     jamKirim: body.jamKirim ?? body.jam_kirim ?? '',
     tanggalKirim: body.tanggalKirim ?? body.tanggal_kirim ?? body.tanggal ?? todayStr(),
     mode,
+    metodeBayar: body.metodeBayar === 'whatsapp' ? 'whatsapp' : 'midtrans',
     subtotal,
     ongkir,
     totalHarga: subtotal + ongkir,
