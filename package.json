@@ -22,6 +22,7 @@
   "dependencies": {
     "@astrojs/node": "^11.1.13",
     "@astrojs/svelte": "^9.1.6",
+    "@astrojs/vercel": "^11.0.22",
     "@neondatabase/serverless": "^1.2.1",
     "astro": "^7.4.12",
     "drizzle-orm": "^0.45.4",
