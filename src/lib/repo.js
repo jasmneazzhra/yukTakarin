@@ -34,6 +34,7 @@ let _produk = MENU.map((m, i) => ({
   biayaKemasan: m.biayaKemasan ?? m.biaya_kemasan ?? 0,
   biayaOperasional: m.biayaOperasional ?? m.biaya_operasional ?? 0,
   stok: m.stok ?? 20,
+  kalori: m.kalori ?? null,
   instruksiDapur: m.instruksiDapur ?? m.instruksi_dapur ?? null,
   imageUrl: m.imageUrl ?? m.image_url ?? null,
   aktif: m.aktif ?? true,
@@ -51,13 +52,29 @@ export function modeData() {
 
 const err = (message, status = 400) => Object.assign(new Error(message), { status });
 
+function komposisiUntukPublik(resep = []) {
+  return resep.map((r) => {
+    const b = _bahan.find((x) => x.slug === (r.bahan ?? r.slug)) ?? {};
+    return {
+      slug: r.bahan ?? r.slug,
+      nama: b.nama ?? r.nama ?? r.bahan ?? r.slug,
+      jumlah: Number(r.jumlah),
+      satuan: r.satuan,
+      takaranKiraKira: r.takaranKiraKira,
+      kategori: b.kategori ?? 'utama',
+      satuanBeli: b.satuanBeli ?? 'kg',
+      isiPerSatuan: b.isiPerSatuan ?? 1000,
+      densitas: b.densitas ?? 1,
+      gramPerSatuan: b.gramPerSatuan ?? null,
+    };
+  });
+}
+
 function produkPublik(p) {
   const {
     resep,
     biayaKemasan,
     biayaOperasional,
-    porsiDasar,
-    porsiPerSatuan,
     prepMenit,
     prosesLabel,
     prosesMenit,
@@ -66,8 +83,8 @@ function produkPublik(p) {
     dibuatPada,
     ...pub
   } = p;
-  // pastikan tidak ada field modal resep/harga bahan
-  return { ...pub };
+  // porsiDasar & porsiPerSatuan tetap dikirim; harga bahan tidak.
+  return { ...pub, komposisi: komposisiUntukPublik(resep) };
 }
 
 export async function daftarProduk(opts = {}) {
@@ -101,6 +118,7 @@ export async function buatProduk(body) {
     biayaKemasan: Number(body.biayaKemasan ?? body.biaya_kemasan ?? 0),
     biayaOperasional: Number(body.biayaOperasional ?? body.biaya_operasional ?? 0),
     stok: Number(body.stok ?? 0),
+    kalori: body.kalori == null || body.kalori === '' ? null : Number(body.kalori),
     instruksiDapur: body.instruksiDapur ?? body.instruksi_dapur ?? null,
     imageUrl: body.imageUrl ?? body.image_url ?? null,
     aktif: body.aktif ?? true,
@@ -141,20 +159,53 @@ function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
+const ONGKIR_KIRIM = 15000;
+
 export async function buatPesanan(body) {
+  const mode = body.mode === 'ambil' ? 'ambil' : 'kirim';
+
+  // Daftar item: dari keranjang (items[]) atau bentuk lama (satu produk).
+  const mentah = Array.isArray(body.items) && body.items.length
+    ? body.items
+    : [{ productId: body.productId ?? body.product_id, jumlah: body.jumlahPorsi ?? body.jumlah_porsi ?? body.jumlah ?? 1 }];
+
+  const gabung = new Map();
+  for (const it of mentah) {
+    const id = String(it.productId ?? it.product_id ?? '');
+    const jumlah = Number(it.jumlah);
+    if (!Number.isInteger(jumlah) || jumlah < 1) throw err('Jumlah item tidak valid.');
+    gabung.set(id, (gabung.get(id) ?? 0) + jumlah);
+  }
+
+  // Harga selalu dihitung di server dari data produk, bukan dari browser.
+  const items = [];
+  for (const [id, jumlah] of gabung) {
+    const p = _produk.find((x) => String(x.id) === id);
+    if (!p || p.aktif === false) throw err('Menu tidak ditemukan.', 404);
+    if (Number(p.stok) < jumlah) throw err(`Stok ${p.nama} tersisa ${p.stok}.`);
+    items.push({ productId: p.id, namaMenu: p.nama, satuan: p.satuan, jumlah, harga: p.harga });
+  }
+
+  const subtotal = items.reduce((t, i) => t + i.harga * i.jumlah, 0);
+  const ongkir = mode === 'kirim' ? ONGKIR_KIRIM : 0;
+  const ringkas = items.map((i) => `${i.namaMenu} ×${i.jumlah}`).join(', ');
+
   const pesanan = {
     id: _nextOrderId++,
-    productId: body.productId ?? body.product_id ?? null,
-    namaMenu: body.namaMenu ?? body.nama_menu ?? body.nama ?? 'Pesanan',
-    jumlahPorsi: Number(body.jumlahPorsi ?? body.jumlah_porsi ?? body.jumlah ?? 1),
+    productId: items[0].productId,
+    items,
+    namaMenu: ringkas,
+    jumlahPorsi: items.reduce((t, i) => t + i.jumlah, 0),
     jamKirim: body.jamKirim ?? body.jam_kirim ?? '',
     tanggalKirim: body.tanggalKirim ?? body.tanggal_kirim ?? body.tanggal ?? todayStr(),
-    mode: body.mode ?? 'kirim',
-    totalHarga: Number(body.totalHarga ?? body.total_harga ?? 0),
+    mode,
+    subtotal,
+    ongkir,
+    totalHarga: subtotal + ongkir,
     catatan: body.catatan ?? null,
     namaPemesan: body.namaPemesan ?? body.nama_pemesan ?? body.nama ?? null,
-    status: body.status ?? 'Menunggu',
-    paymentStatus: body.paymentStatus ?? body.payment_status ?? 'pending',
+    status: 'Menunggu',
+    paymentStatus: 'pending',
     dibuatPada: new Date().toISOString(),
     userId: body.userId ?? body.user_id ?? null,
   };

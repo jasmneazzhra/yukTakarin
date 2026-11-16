@@ -1,4 +1,5 @@
 <script>
+  import { onMount } from 'svelte';
   import { formatRupiah, formatTakaran, skalaResep, validasiPesanan, validasiStok } from '../lib/kitchen.js';
 
   let { produk = [], sumber = 'seed', clientKey = '', snapUrl = '' } = $props();
@@ -23,8 +24,7 @@
   let urutan = $state('nama');
   let maksKalori = $state('');
 
-  let dipilih = $state(null);
-  let jumlah = $state(1);
+  let keranjang = $state([]); // [{ id, jumlah }]
   let mode = $state('kirim');
   let tanggal = $state(tanggalAwal);
   let jamKirim = $state('12:00');
@@ -33,6 +33,23 @@
   let sudahCoba = $state(false);
   let detail = $state(null);
   let detailJumlah = $state(1);
+  let dipilih = $state(null);
+  let jumlah = $state(1);
+
+  const cekStok = $derived.by(() => {
+    if (!dipilih) return { valid: true, pesan: '' };
+    return validasiStok({ jumlah: Number(jumlah) || 0, stok: Number(dipilih.stok ?? 0) });
+  });
+
+  function pilih(item) {
+    dipilih = item;
+    jumlah = 1;
+  }
+
+  function tambah(selisih) {
+    if (!dipilih) return;
+    jumlah = Math.max(1, Math.min(Number(dipilih.stok ?? Infinity), Number(jumlah || 1) + selisih));
+  }
 
   const hasil = $derived.by(() => {
     const teks = kueri.trim().toLowerCase();
@@ -53,25 +70,30 @@
     });
   });
 
-  const subtotal = $derived(dipilih ? dipilih.harga * Number(jumlah || 0) : 0);
-  const ongkir = $derived(mode === 'kirim' ? ONGKIR : 0);
+  const baris = $derived(
+    keranjang
+      .map((k) => ({ item: produk.find((p) => p.id === k.id), jumlah: Number(k.jumlah) || 0 }))
+      .filter((b) => b.item),
+  );
+  const jumlahItem = $derived(baris.reduce((t, b) => t + b.jumlah, 0));
+  const subtotal = $derived(baris.reduce((t, b) => t + b.item.harga * b.jumlah, 0));
+  const ongkir = $derived(mode === 'kirim' && baris.length ? ONGKIR : 0);
   const total = $derived(subtotal + ongkir);
-
-  const validasi = $derived.by(() =>
-    validasiPesanan({
-      jumlah: Number(jumlah),
-      tanggal,
-      jamKirim,
-      nama,
-      mode,
-    }),
+  const totalKalori = $derived(
+    baris.reduce((t, b) => t + (b.item.kalori ?? 0) * b.jumlah * (b.item.porsiPerSatuan ?? 1), 0),
   );
 
+  // jumlah dummy 1: validasi keranjang ditangani terpisah (stokError).
+  const validasi = $derived.by(() => validasiPesanan({ jumlah: 1, tanggal, jamKirim, nama, mode }));
   const galat = $derived(Object.fromEntries(validasi.errors.map((e) => [e.field, e.pesan])));
 
-  const cekStok = $derived(
-    dipilih ? validasiStok({ jumlah: Number(jumlah), stok: dipilih.stok }) : { valid: false },
-  );
+  const stokError = $derived.by(() => {
+    for (const b of baris) {
+      const cek = validasiStok({ jumlah: b.jumlah, stok: b.item.stok });
+      if (!cek.valid) return `${b.item.nama}: ${cek.pesan}`;
+    }
+    return '';
+  });
 
   const rincianDetail = $derived.by(() => {
     if (!detail) return null;
@@ -86,11 +108,52 @@
     }
   });
 
-  function pilih(item) {
-    dipilih = item;
-    jumlah = 1;
+  const adaDiKeranjang = (id) => keranjang.find((k) => k.id === id)?.jumlah ?? 0;
+
+  function tambahKeranjang(item, qty = 1) {
+    const stok = Number(item.stok ?? 0);
+    if (stok <= 0) return;
+    const ada = keranjang.find((k) => k.id === item.id);
+    if (ada) ada.jumlah = Math.min(stok, ada.jumlah + qty);
+    else keranjang.push({ id: item.id, jumlah: Math.min(stok, qty) });
     sudahCoba = false;
   }
+
+  function ubahJumlah(id, selisih) {
+    const k = keranjang.find((x) => x.id === id);
+    const item = produk.find((p) => p.id === id);
+    if (!k || !item) return;
+    k.jumlah = Math.max(1, Math.min(Number(item.stok ?? Infinity), Number(k.jumlah || 0) + selisih));
+  }
+
+  function aturJumlah(id, nilai) {
+    const k = keranjang.find((x) => x.id === id);
+    if (k) k.jumlah = Math.max(1, Math.floor(Number(nilai) || 1));
+  }
+
+  function hapusItem(id) {
+    keranjang = keranjang.filter((k) => k.id !== id);
+  }
+
+  // Simpan keranjang di browser supaya tidak hilang saat refresh.
+  const KUNCI = 'yuktakarin-keranjang';
+  let siapSimpan = false;
+  onMount(() => {
+    try {
+      const tersimpan = JSON.parse(localStorage.getItem(KUNCI) ?? '[]');
+      keranjang = tersimpan
+        .map((k) => ({ id: k.id, jumlah: Number(k.jumlah) }))
+        .filter((k) => produk.some((p) => p.id === k.id) && k.jumlah >= 1);
+    } catch {}
+    siapSimpan = true;
+  });
+  $effect(() => {
+    const data = JSON.stringify(keranjang);
+    if (!siapSimpan) return;
+    try {
+      localStorage.setItem(KUNCI, data);
+    } catch {}
+  });
 
   function bukaDetail(item) {
     detail = item;
@@ -98,15 +161,8 @@
   }
 
   function pakaiDetail() {
-    pilih(detail);
+    tambahKeranjang(detail, Math.max(1, Math.floor(Number(detailJumlah) || 1)));
     detail = null;
-  }
-
-  function tambah(selisih) {
-    if (!dipilih) return;
-    const stok = Number(dipilih.stok ?? Infinity);
-    const berikut = Math.max(1, Math.min(stok, Number(jumlah || 0) + selisih));
-    jumlah = berikut;
   }
 
   let sedangBayar = $state(false);
@@ -116,7 +172,7 @@
 
   // Form berubah → pesanan lama tidak relevan lagi, buat baru saat bayar.
   $effect(() => {
-    dipilih; jumlah; mode; tanggal; jamKirim; nama; catatan;
+    JSON.stringify(keranjang); mode; tanggal; jamKirim; nama; catatan;
     pesananId = null;
   });
 
@@ -145,7 +201,7 @@
     sudahCoba = true;
     pesanError = '';
     infoBayar = '';
-    if (!validasi.valid || !dipilih || !cekStok.valid) return;
+    if (!validasi.valid || baris.length === 0 || stokError) return;
     if (!clientKey || !snapUrl) {
       pesanError = 'Pembayaran belum dikonfigurasi (MIDTRANS_CLIENT_KEY kosong).';
       return;
@@ -158,9 +214,7 @@
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
-            productId: dipilih.id,
-            namaMenu: dipilih.nama,
-            jumlahPorsi: Number(jumlah),
+            items: baris.map((b) => ({ productId: b.item.id, jumlah: b.jumlah })),
             jamKirim,
             tanggal,
             mode,
@@ -185,10 +239,12 @@
       window.snap.pay(hasilBayar.data.token, {
         onSuccess: (hasil) => {
           infoBayar = 'Pembayaran berhasil! Pesananmu sudah kami terima.';
+          keranjang = [];
           sinkronStatus(hasil.order_id);
         },
         onPending: (hasil) => {
           infoBayar = 'Menunggu pembayaran. Selesaikan sesuai instruksi di layar.';
+          keranjang = [];
           sinkronStatus(hasil.order_id);
         },
         onError: () => {

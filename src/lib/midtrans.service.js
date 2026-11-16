@@ -24,14 +24,22 @@ export function idPesananDariOrderId(orderId) {
   return cocok ? Number(cocok[1]) : null;
 }
 
-export function buildMidtransParams({ orderId, amount, namaItem = 'Pesanan Warung', buyer = {} }) {
+export function buildMidtransParams({ orderId, amount, namaItem = 'Pesanan Warung', items = null, buyer = {} }) {
   if (!orderId) throw new Error('orderId wajib diisi');
   const gross = Math.round(Number(amount));
   if (!Number.isFinite(gross) || gross <= 0) throw new Error('amount harus > 0');
 
   const params = {
     transaction_details: { order_id: String(orderId), gross_amount: gross },
-    item_details: [{ id: String(orderId), price: gross, quantity: 1, name: String(namaItem).slice(0, 50) }],
+    item_details:
+      Array.isArray(items) && items.length
+        ? items.map((i) => ({
+            id: String(i.id).slice(0, 50),
+            price: Math.round(Number(i.price)),
+            quantity: Number(i.quantity),
+            name: String(i.name).slice(0, 50),
+          }))
+        : [{ id: String(orderId), price: gross, quantity: 1, name: String(namaItem).slice(0, 50) }],
   };
   if (buyer.name || buyer.email) {
     params.customer_details = {

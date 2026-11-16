@@ -22,6 +22,15 @@ export async function POST({ request }) {
         orderId: midtransOrderId,
         amount: pesanan.totalHarga,
         namaItem: pesanan.namaMenu,
+        items: [
+          ...(pesanan.items ?? []).map((i) => ({
+            id: `P${i.productId}`,
+            price: i.harga,
+            quantity: i.jumlah,
+            name: i.namaMenu,
+          })),
+          ...(pesanan.ongkir > 0 ? [{ id: 'ONGKIR', price: pesanan.ongkir, quantity: 1, name: 'Ongkos kirim' }] : []),
+        ],
         buyer: { name: pesanan.namaPemesan },
       }),
     );
